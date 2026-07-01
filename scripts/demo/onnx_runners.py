@@ -179,10 +179,10 @@ class TRTRunner:
 
 
 def _try_hf_download(name: str) -> Optional[str]:
-    """Download an ONNX from HuggingFace. Returns local path on success, else None."""
+    """Download an ONNX from a HuggingFace-compatible endpoint."""
     try:
         from gem.utils.hf_utils import download_onnx_model
-        Log.info(f"[HF] Downloading ONNX model '{name}' from HuggingFace ...")
+        Log.info(f"[HF] Downloading ONNX model '{name}' ...")
         return download_onnx_model(name)
     except Exception as e:
         Log.warn(f"[HF] Download failed for '{name}': {e}")
