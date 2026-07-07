@@ -1,0 +1,132 @@
+<mxfile host="app.diagrams.net" modified="2026-07-02T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="demo-webcam-pipeline" name="demo_webcam.py pipeline">
+    <mxGraphModel dx="2200" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2700" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="demo_webcam.py 实时推理流水线" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="620" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="frontend-lane" value="Frontend: run() + process_frame()" style="swimlane;html=1;startSize=28;rounded=0;fillColor=#f5f5f5;strokeColor=#d6d6d6;fontStyle=1;horizontal=1" vertex="1" parent="1">
+          <mxGeometry x="30" y="60" width="1580" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="backend-lane" value="Backend: _run_backend()" style="swimlane;html=1;startSize=28;rounded=0;fillColor=#fff7e6;strokeColor=#d79b00;fontStyle=1;horizontal=1" vertex="1" parent="1">
+          <mxGeometry x="1310" y="285" width="1180" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="render-lane" value="Optional render subprocess" style="swimlane;html=1;startSize=28;rounded=0;fillColor=#e1f5fe;strokeColor=#6ab7d6;fontStyle=1;horizontal=1" vertex="1" parent="1">
+          <mxGeometry x="2220" y="535" width="270" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="source" value="输入源&lt;br&gt;&lt;b&gt;video / webcam&lt;/b&gt;&lt;br&gt;--video 或 --camera_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#666666;fontSize=13" vertex="1" parent="1">
+          <mxGeometry x="50" y="105" width="150" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage1" value="&lt;b&gt;Stage 1: 取帧&lt;/b&gt;&lt;br&gt;触发: 每轮 cap.read()&lt;br&gt;输入: video/camera&lt;br&gt;输出: frame_bgr" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="240" y="95" width="180" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage2" value="&lt;b&gt;Stage 2: 检测和跟踪&lt;/b&gt;&lt;br&gt;触发: ByteTrack 每帧&lt;br&gt;YOLOX: frame_index % yolo_period == 0 或无 bbox&lt;br&gt;输入: frame_bgr&lt;br&gt;输出: bbox_xyxy / track_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="470" y="80" width="240" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage3" value="&lt;b&gt;Stage 3: bbox 转换&lt;/b&gt;&lt;br&gt;触发: 有 bbox_xyxy&lt;br&gt;输入: [x1,y1,x2,y2]&lt;br&gt;输出: bbx_xys=[cx,cy,size]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="95" width="220" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage4" value="&lt;b&gt;Stage 4: ViTPose + HMR2&lt;/b&gt;&lt;br&gt;触发: vitpose_period 条件满足&lt;br&gt;async: future 未完成则复用缓存&lt;br&gt;输入: frame_bgr + bbx_xys&lt;br&gt;输出: kp2d / f_img / paired frame" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1030" y="75" width="260" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage5" value="&lt;b&gt;Stage 5: 滑动窗口&lt;/b&gt;&lt;br&gt;触发: 有 bbx/kp2d/f_img&lt;br&gt;输入: 当前帧特征&lt;br&gt;输出: 最近 context_frames 帧&lt;br&gt;未满: warmup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1350" y="85" width="230" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="preproc-async" value="&lt;b&gt;_preproc_executor&lt;/b&gt;&lt;br&gt;后台运行 ViTPose + HMR2&lt;br&gt;最多一个 preproc future&lt;br&gt;future pending: 复用 last kp2d/f_img" style="rounded=1;dashed=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1030" y="255" width="260" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage6" value="&lt;b&gt;Stage 6: GEM-SMPL denoiser&lt;/b&gt;&lt;br&gt;触发: window 满&lt;br&gt;async: 无 denoiser future 才提交&lt;br&gt;输入: obs / bbx_xys / K / f_imgseq / cam_angvel&lt;br&gt;输出: pred_x / pred_cam" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1340" y="325" width="260" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage7" value="&lt;b&gt;Stage 7: EnDecoder 解码&lt;/b&gt;&lt;br&gt;触发: denoiser 完成&lt;br&gt;输入: pred_x&lt;br&gt;输出: decode_dict&lt;br&gt;body_pose / global_orient / local_transl_vel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1660" y="335" width="240" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage8" value="&lt;b&gt;Stage 8: Streaming rollout&lt;/b&gt;&lt;br&gt;触发: decode 后立即执行&lt;br&gt;输入: decode_dict / pred_cam / bbx_xys / K / rollout_state&lt;br&gt;输出: body_params_global / body_params_incam" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1940" y="320" width="270" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage9" value="&lt;b&gt;Stage 9: bbox 反馈&lt;/b&gt;&lt;br&gt;触发: last kp2d 有可见点&lt;br&gt;输入: kp2d_last&lt;br&gt;输出: _updated_bbox&lt;br&gt;作用: 更新下一轮 bbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="770" y="335" width="230" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="backend-async" value="&lt;b&gt;_denoiser_executor&lt;/b&gt;&lt;br&gt;后台运行 Stage 6-9&lt;br&gt;future done 后主循环回收结果&lt;br&gt;pending: 不提交第二个 backend 任务" style="rounded=1;dashed=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1340" y="535" width="260" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="result" value="&lt;b&gt;ready result&lt;/b&gt;&lt;br&gt;result[body_params_incam]&lt;br&gt;result[body_params_global]&lt;br&gt;timing / updated_bbox / paired frame" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="2250" y="335" width="220" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage10" value="&lt;b&gt;Stage 10: 可选渲染&lt;/b&gt;&lt;br&gt;触发: --render 且 ready=True&lt;br&gt;输入: frame_bgr / body_params / K&lt;br&gt;输出: Viser 3D view 或 OpenCV overlay&lt;br&gt;queue 满: 丢弃渲染帧" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b3e5fc;strokeColor=#0288d1;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="2240" y="575" width="230" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="output-consumer" value="下游接入点&lt;br&gt;机器人模仿 / 控制器 / 记录器&lt;br&gt;建议只消费 ready=True" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="2250" y="725" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="note1" value="默认参数要点:&lt;br&gt;YOLOX: --yolo_period 5&lt;br&gt;ViTPose: --vitpose_period 1&lt;br&gt;context_frames: 120&lt;br&gt;async_pipeline: 默认开启&lt;br&gt;--no_imgfeat: 跳过 HMR2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="50" y="280" width="230" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="note2" value="滑动窗口不是消耗后清空:&lt;br&gt;窗口满之前只 warmup；满之后保留最近 context_frames 个有效帧。新帧进入时最老帧自动移出。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="310" y="280" width="360" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-source-stage1" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="source" target="stage1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage1-stage2" value="frame_bgr" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage1" target="stage2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage2-stage3" value="bbox_xyxy" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage2" target="stage3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage3-stage4" value="bbx_xys" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage3" target="stage4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage4-stage5" value="kp2d / f_img / paired frame" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage4" target="stage5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage5-stage6" value="window full" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage5" target="stage6">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1465" y="260"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-stage6-stage7" value="pred_x / pred_cam" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage6" target="stage7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage7-stage8" value="decode_dict" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage7" target="stage8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage8-result" value="body params" style="endArrow=block;html=1;rounded=0;strokeWidth=2" edge="1" parent="1" source="stage8" target="result">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-result-render" value="render queue" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#0288d1" edge="1" parent="1" source="result" target="stage10">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-result-consumer" value="ready=True" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450" edge="1" parent="1" source="result" target="output-consumer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage8-stage9" value="kp2d_last" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#d6b656" edge="1" parent="1" source="stage8" target="stage9">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2075" y="515"/>
+              <mxPoint x="885" y="515"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-stage9-stage2" value="updated bbox" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#d6b656;dashed=1" edge="1" parent="1" source="stage9" target="stage2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="885" y="245"/>
+              <mxPoint x="590" y="245"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-stage4-preproc" value="async submit / done" style="endArrow=block;html=1;rounded=0;strokeWidth=1;strokeColor=#9673a6;dashed=1" edge="1" parent="1" source="stage4" target="preproc-async">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-stage6-backend-async" value="async submit / done" style="endArrow=block;html=1;rounded=0;strokeWidth=1;strokeColor=#9673a6;dashed=1" edge="1" parent="1" source="stage6" target="backend-async">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
